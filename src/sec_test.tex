@@ -7,16 +7,67 @@
 
 В таблице 5.1 представлены тестовые сценарии, разработанные в ходе выполнения дипломного проекта для данного мобильного программного средства.
 \begin{table}[ht]
-  \caption{Работники, занятые в проекте}
+  \caption{Тестовые сценарии}
   \label{table:econ:programmers}
-  \begin{tabular}{| >{\raggedright}m{0.20\textwidth} 
-                  | >{\raggedright}m{0.28\textwidth} 
-                  | >{\raggedright}m{0.28\textwidth} 
-                  | >{\raggedright\arraybackslash}m{0.12\textwidth}|}
+  \begin{tabular}{| >{\raggedright}p{0.20\linewidth} 
+                  | >{\raggedright}p{0.28\linewidth} 
+                  | >{\raggedright}p{0.28\linewidth} 
+                  | >{\raggedright\arraybackslash}p{0.12\linewidth}|}
    \hline
    Идентификатор тест-кейса & Описание тест-кейса & Ожидаемый результат & Тестовый сценарий пройден Да/Нет \\
    \hline
-   Login-1 & Ввести в инпуты значения & Появится сообщение & Да \\
+   Login-1 & \begin{enumerate}
+				\item[1)] Ввести в поле <<Login>> и поле <<Passcode>> не корректные значения;
+				\item[2)] Нажать на кнопку <<Log In>>;
+			\end{enumerate}
+   			 & Появится сообщение <<Invalid login>> & Да \\
+
    \hline
+   Login-2 & \begin{enumerate}
+				\item[1)] Ввести в поле корректное значение <<Login>>;
+				\item[2)] Ввести в поле <<Passcode>> значение из символов;
+				\item[3)] Нажать на кнопку <<Log In>>;
+			\end{enumerate}
+			& Появится сообщение <<Passcode length should be 4 number>> & Да \\
+
+   \hline
+   Login-3 & \begin{enumerate}
+				\item[1)] Ввести в поле корректное значение <<Login>>;
+				\item[2)] Ввести в поле <<Passcode>> значение из более чем 4 цифр;
+				\item[3)] Нажать на кнопку <<Log In>>;
+			\end{enumerate}
+   			& Появится сообщение <<Passcode length should be 4 number>> & Да \\
+   	\hline
+   Login-4 & \begin{enumerate}
+				\item[1)] Ввести в поле корректное значение <<Login>>;
+				\item[2)] Ввести в поле <<Passcode>> корректное значение из 4 цифр;
+				\item[3)] Нажать на кнопку <<Log In>>;
+			\end{enumerate}
+   			& 
+   			\begin{enumerate}
+				\item[1)] Закрывается страница авторизации;
+				\item[2)] Появляется главная страница приложения;
+			\end{enumerate}
+			& Да \\
+   \hline
+   Login-5 & \begin{enumerate}
+				\item[1)] Ввести в поле корректное значение <<Login>>;
+				\item[2)] Ввести в поле <<Passcode>> значение из 4 цифр не являющуюся паролем данного пользователя;
+				\item[3)] Нажать на кнопку <<Log In>>;
+			\end{enumerate}
+   			& Появится сообщение <<Invalid Passcode>> & Да \\
+   	\hline
+   	Login-6 & \begin{enumerate}
+				\item[1)] Ввести в поле несколько пробелов, а после корректное значение <<Login>>;
+				\item[2)] Ввести в поле <<Passcode>> корректное значение из 4 цифр;
+				\item[3)] Нажать на кнопку <<Log In>>;
+			\end{enumerate}
+   			&
+   			\begin{enumerate}
+				\item[1)] Закрывается страница авторизации;
+				\item[2)] Появляется главная страница приложения;
+			\end{enumerate}
+			& Да \\
+   	\hline
   \end{tabular}
 \end{table}
