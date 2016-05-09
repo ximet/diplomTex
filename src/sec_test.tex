@@ -12,60 +12,112 @@
                   | >{\raggedright}p{0.28\linewidth} 
                   | >{\raggedright}p{0.28\linewidth} 
                   | >{\raggedright\arraybackslash}p{0.12\linewidth}|}
+   \caption{Тестовые сценарии} \label{tab:long} \\
+
    \hline
    Идентификатор тест-кейса & Описание тест-кейса & Ожидаемый результат & Тестовый сценарий пройден Да/Нет \\
+   \endfirsthead
+
+\multicolumn{4}{c}%
+{{\raggedright Продолжение таблицы \thetable{}}} \\
+\hline
+   Идентификатор тест-кейса & Описание тест-кейса & Ожидаемый результат & Тестовый сценарий пройден Да/Нет \\
+\endhead
    \hline
-   Login-1 & \begin{enumerate}
-				\item[1)] Ввести в поле <<Login>> и поле <<Passcode>> не корректные значения;
+   Login-1 & \begin{enumerate} \item[1)] Ввести в поле <<Login>> и поле <<Passcode>> не корректные значения;
 				\item[2)] Нажать на кнопку <<Log In>>;
 			\end{enumerate}
    			 & Появится сообщение <<Invalid login>> & Да \\
 
    \hline
-   Login-2 & \begin{enumerate}
-				\item[1)] Ввести в поле корректное значение <<Login>>;
+   Login-2 & \begin{enumerate} \item[1)] Ввести в поле корректное значение <<Login>>;
 				\item[2)] Ввести в поле <<Passcode>> значение из символов;
 				\item[3)] Нажать на кнопку <<Log In>>;
 			\end{enumerate}
 			& Появится сообщение <<Passcode length should be 4 number>> & Да \\
 
    \hline
-   Login-3 & \begin{enumerate}
-				\item[1)] Ввести в поле корректное значение <<Login>>;
+   Login-3 & \begin{enumerate} \item[1)] Ввести в поле корректное значение <<Login>>;
 				\item[2)] Ввести в поле <<Passcode>> значение из более чем 4 цифр;
 				\item[3)] Нажать на кнопку <<Log In>>;
 			\end{enumerate}
    			& Появится сообщение <<Passcode length should be 4 number>> & Да \\
    	\hline
-   Login-4 & \begin{enumerate}
-				\item[1)] Ввести в поле корректное значение <<Login>>;
+   Login-4 & \begin{enumerate} \item[1)] Ввести в поле корректное значение <<Login>>;
 				\item[2)] Ввести в поле <<Passcode>> корректное значение из 4 цифр;
 				\item[3)] Нажать на кнопку <<Log In>>;
 			\end{enumerate}
-   			& 
-   			\begin{enumerate}
-				\item[1)] Закрывается страница авторизации;
+   			& \begin{enumerate} \item[1)] Закрывается страница авторизации;
 				\item[2)] Появляется главная страница приложения;
 			\end{enumerate}
 			& Да \\
    \hline
-   Login-5 & \begin{enumerate}
-				\item[1)] Ввести в поле корректное значение <<Login>>;
+   Login-5 & \begin{enumerate} \item[1)] Ввести в поле корректное значение <<Login>>;
 				\item[2)] Ввести в поле <<Passcode>> значение из 4 цифр не являющуюся паролем данного пользователя;
 				\item[3)] Нажать на кнопку <<Log In>>;
 			\end{enumerate}
    			& Появится сообщение <<Invalid Passcode>> & Да \\
    	\hline
-   	Login-6 & \begin{enumerate}
-				\item[1)] Ввести в поле несколько пробелов, а после корректное значение <<Login>>;
+   	Login-6 & \begin{enumerate} \item[1)] Ввести в поле несколько пробелов, а после корректное значение <<Login>>;
 				\item[2)] Ввести в поле <<Passcode>> корректное значение из 4 цифр;
 				\item[3)] Нажать на кнопку <<Log In>>;
 			\end{enumerate}
-   			&
-   			\begin{enumerate}
-				\item[1)] Закрывается страница авторизации;
+   			& \begin{enumerate} \item[1)] Закрывается страница авторизации;
 				\item[2)] Появляется главная страница приложения;
 			\end{enumerate}
 			& Да \\
    	\hline
+   	Register-1 & \begin{enumerate} \item[1)] Ввести в поле значение <<Login>>;
+				\item[2)] Ввести в поле <<Passcode>> корректное значение из 4 цифр без пробелов;
+				\item[3)] Ввести в поле <<Confirm Passcode>> другое значение из 4 цифр без пробелов;
+				\item[4)] Нажать на кнопку <<Register>>;
+			\end{enumerate}
+   			& Появляется сообщение <<Not corrected passcode>>;
+			& Да \\
+   	\hline
+   	Register-2 & \begin{enumerate} \item[1)] Ввести в поле значение <<Login>>;
+				\item[2)] Ввести в поле <<Passcode>> корректное значение из 4 цифр без пробелов;
+				\item[3)] Ввести в поле <<Confirm Passcode>> схожее значение с полем <<Passcode>>
+				\item[4)] Нажать на кнопку <<Register>>;
+			\end{enumerate}
+   			& \begin{enumerate} \item[1)] Закрывается страница авторизации;
+				\item[2)] Появляется страница заполнения профиля;
+			\end{enumerate}
+			& Да \\
+   	\hline
+   	Register-3 & \begin{enumerate} \item[1)] Ввести в поле значение <<Login>>;
+				\item[2)] Ввести в поле <<Passcode>> значение из более чем 4 цифр без пробелов;
+				\item[3)] Ввести в поле <<Confirm Passcode>> схожее значение с полем <<Passcode>>
+				\item[4)] Нажать на кнопку <<Register>>;
+			\end{enumerate}
+   			& Появится сообщение <<Passcode length should be 4 number>> & Да \\
+   	\hline
+   	Register-4 & \begin{enumerate} \item[1)] Ввести в поле значение <<Login>> существующего пользователя;
+				\item[2)] Ввести в поле <<Passcode>> корректное значение из 4 цифр без пробелов;
+				\item[3)] Ввести в поле <<Confirm Passcode>> схожее значение с полем <<Passcode>>
+				\item[4)] Нажать на кнопку <<Register>>;
+			\end{enumerate}
+   			& Появится сообщение <<User consist in system>> & Да \\
+   	\hline
+   	Register-5 & \begin{enumerate} \item[1)] Ввести в поле значение <<Login>>;
+				\item[2)] Ввести в поле <<Passcode>> строку с пробелами и следом 4 цифры;
+				\item[3)] Ввести в поле <<Confirm Passcode>> схожее значение с полем <<Passcode>>
+				\item[4)] Нажать на кнопку <<Register>>;
+			\end{enumerate}
+   			& Появится сообщение <<Passcode can't contain space>> & Да \\
+   	\hline
+   	Register-6 & \begin{enumerate} \item[1)] Ввести в поле значение <<Login>>;
+				\item[2)] Ввести в поле <<Passcode>> корректное значение из 4 цифр без пробелов;
+				\item[3)] Ввести в поле <<Confirm Passcode>> схожее значение из 4 цифр с пробелов;
+				\item[4)] Нажать на кнопку <<Register>>;
+			\end{enumerate}
+   			& Появится сообщение <<Passcode can't contain space>> & Да \\
+   	\hline
+   	Logout-1 & \begin{enumerate} \item[1)] Ввести в поле корректное значение <<Login>>;
+				\item[2)] Ввести в поле <<Passcode>> корректное значение из 4 цифр;
+				\item[3)] Нажать на кнопку <<Log In>>;
+				\item[3)] Нажать на кнопку <<Log Out>>;
+			\end{enumerate}
+   			& Появится страница с окном авторизации & Да \\
+   \hline
   \end{longtable}
