@@ -1,0 +1,935 @@
+\sectioncentered*{ПРИЛОЖЕНИЕ А}
+\addcontentsline{toc}{section}{Приложение А}
+
+\begin{lstlisting}[style=fsharpstyle, caption={Определение вспомогательного класса Result}, label=lst:result_class]
+public class Result
+{
+  protected Result(bool success, string error)
+  {
+    Success = success;
+    Error = error;
+  }
+  public bool Success { get; private set; }
+  public bool Failed => !Success;
+  public string Error { get; private set; }
+  
+  public static Result Ok()
+  {
+    return new Result(true, string.Empty);
+  }
+
+  public static Result Fail(string error)
+  {
+    return new Result(false, error);
+  }
+
+  public static Result<T> Ok<T>(T value)
+  {
+    return Result<T>.Ok(value);
+  }
+
+  public static Result<T> Fail<T>(string error)
+  {
+    return Result<T>.Fail(error);
+  } 
+}
+
+public class Result<T> : Result
+{
+  private T _value;
+
+  protected Result(T value) : base(true, string.Empty)
+  {
+    Value = value;
+  }
+
+  protected Result(string error) : base(false, error)
+  {
+  } 
+
+  public T Value
+  {
+    get
+    {
+      if (Failed)
+      {
+        throw new NotSupportedException("Can't get value from Failed Result");
+      }
+      return _value;
+    }
+    protected set { _value = value; }
+  }
+
+  public static Result<T> Ok(T value)
+  {
+    return new Result<T>(value);
+  }
+
+  public new static Result<T> Fail(string error)
+  {
+    return new Result<T>(error);
+  }
+}
+\end{lstlisting}
+
+\begin{lstlisting}[style=fsharpstyle, caption={Определение интерфейса для фильтра}, label=lst:ifilter]
+public interface IFilter<in TIn, TOut> 
+{
+  Result<TOut> Process(TIn input);
+}
+\end{lstlisting}
+
+\begin{lstlisting}[style=fsharpstyle, caption={Определение вспомогательного класса Maybe}, label=lst:maybe]
+public struct Maybe<T>
+{
+  private readonly T _value;
+  public T Value
+  {
+    get
+    {
+      if (HasNoValue)
+      {
+        throw new NotSupportedException("Maybe has not value");
+      }
+        return _value;
+      }
+    }
+  }
+  public bool HasValue => return _value != null; 
+  public bool HasNoValue => !HasValue;
+  private Maybe([AllowNull] T value)
+  {
+    _value = value;
+  }
+  public static implicit operator Maybe<T>([AllowNull] T value)
+  {
+    return new Maybe<T>(value);
+  }
+}
+\end{lstlisting}
+
+\begin{lstlisting}[style=fsharpstyle,caption={Определение класса Pipe},label=lst:pipe]
+public class Pipe<T>
+{
+  internal IPipeFactory PipeFactory { get; }
+
+  public Pipe(IPipeFactory pipeFactory)
+  {
+    PipeFactory = pipeFactory;
+  }
+
+  protected Result<T> Obj { get; set; }
+
+  public Pipe<TOut> Do<TFilter, TOut>(Action<TFilter> initAction) where TFilter: IFilter<T, TOut>
+  {
+    Pipe<TOut> result;
+    if (Obj.Success)
+    {
+      var processor = PipeFactory.GetProcessor<TFilter>();
+      initAction(processor);
+      var processingResult = processor.Process(Obj.Value);
+      result = new Pipe<TOut>(PipeFactory).Use(processingResult);
+    }
+    else
+    {
+      result = new Pipe<TOut>(PipeFactory).Use(Result.Fail<TOut>(Obj.Error));
+    }
+
+    return result;
+  }
+
+  public Pipe<TOut> Do<TProcessor, TOut>() where TProcessor : IFilter<T, TOut>
+  {
+    Pipe<TOut> result;
+    if (Obj.Success)
+    {
+      var processor = PipeFactory.GetProcessor<TProcessor>();
+      var processingResult = processor.Process(Obj.Value);
+      result = new Pipe<TOut>(PipeFactory).Use(processingResult);
+    }
+    else
+    {
+      result = new Pipe<TOut>(PipeFactory).Use(Result.Fail<TOut>(Obj.Error));
+    }
+
+    return result;
+  }
+
+  public Result<T> GetResult()
+  {
+    return Obj;
+  }
+
+  public Pipe<T> Use(T obj)
+  {
+    Obj = Result<T>.Ok(obj);
+    return this;
+  }
+
+  public Pipe<T> Use(Result<T> obj)
+  {
+    Obj = obj;
+    return this;
+  }
+
+  public Pipe<T> SaveCurrentResultTo(Action<Result<T>> saveCurrentResultAction)
+  {
+    saveCurrentResultAction(this.GetResult());
+    return this;
+  }
+}
+\end{lstlisting}
+
+\begin{lstlisting}[style=fsharpstyle,caption={Определение метода расширения класса Pipe},label=lst:pipe_enumeration]
+public static Pipe<IEnumerable<TOut>> ForEachItem<T, TOut>(this Pipe<IEnumerable<T>> pipe, Func<Pipe<T>, Pipe<TOut>>  action)
+{
+  var currentResult = pipe.GetResult();
+  var result = new List<TOut>();
+  if (currentResult.Success)
+  {
+    foreach (var item in currentResult.Value)
+    {
+      var processResult = action(new Pipe<T>(pipe.PipeFactory).Use(item)).GetResult();
+      if (processResult.Success)
+      {
+        result.Add(processResult.Value);
+      }
+    }
+  }
+
+  if (result.Any())
+  {
+    return new Pipe<IEnumerable<TOut>>(pipe.PipeFactory).Use(Result.Ok(result.AsEnumerable()));
+  }
+  else
+  {
+    return new Pipe<IEnumerable<TOut>>(pipe.PipeFactory).Use(Result.Fail<IEnumerable<TOut>>("Not one processor hasn't finish successfulley"));
+  }
+}
+\end{lstlisting}
+
+\begin{lstlisting}[style=fsharpstyle,caption={Использование реализации каналы и фильтры},label=lst:pipe_and_filters_results]
+public Result<IEnumerable<string>> Process(byte[] input)
+{
+  Mat binarizedPlate = null;
+
+  return _processFactory.Invoke()
+    .Use(input)
+    .Do<ReadImageFromBytesFilter, Mat>()
+    .Do<MakeImageGrayFilter, Mat>()
+    .Do<DetectAndCropPlateNumberFilter, IEnumerable<Mat>>()
+    .ForEachItem(p => 
+      p.Do<LogCurrentImageFilter, Mat>()
+      .Do<OtsuBinarizationFilter, Mat>()
+      .SaveCurrentResultTo(r => binarizedPlate = r.Value.Clone())
+      .Do<InvertBinarizedImageFilter, Mat>()
+      .Do<FindContoursFilter, Point[][]>()
+      .Do<SelectLettersContours, Point[][]>(processor => processor.UseImage(binarizedPlate))
+      .Do<CropLettersFilter, IEnumerable<Mat>>(processor => processor.UseImage(binarizedPlate))
+      .ForEachItem(ip => ip.Do<GaussianBlurFilter, Mat>().Do<TeseractOcrFilter, char>()))
+    .Do<StringAgregateFilter, IEnumerable<string>>()
+    .GetResult();
+}
+\end{lstlisting}
+
+\begin{lstlisting}[style=fsharpstyle,caption={Определение интерфейса IRecongnitionResultHander}, label=lst:recognition_result_handler]
+public interface IRecongnitionResultHander
+{
+  void HandleSuccess(string result, Mat image);
+  void HandleFaulure(Mat image);
+}
+\end{lstlisting}
+
+\begin{lstlisting}[style=fsharpstyle,caption={Загрузчик плагинов}, label=lst:plugin_loader]
+ public class PluginLoader
+    {
+        public void Load(string path, IUnityContainer container)
+        {
+            foreach (var dlls in Directory.EnumerateFiles(path, "*.dll"))
+            {
+                try
+                {
+                    Assembly assembly = Assembly.LoadFrom(dlls);
+                    assembly.GetTypes()
+                        .Where(mytype => mytype.GetInterfaces().Contains(typeof (IRecongnitionResultHander)))
+                        .ForEach(t => container.RegisterType(typeof(IRecongnitionResultHander), t, dlls + t.FullName));
+                }
+                catch (Exception e)
+                {
+                    Debug.WriteLine($"Eror to load assembly from file {e.Message}");
+                    throw;
+                }
+            }
+        }
+    }
+\end{lstlisting}
+\begin{lstlisting}[style=fsharpstyle,caption={Исходный код}, label=lst:recognition_result_handler]
+    public static class Helper
+    {
+        public static IEnumerable<T> ForEach<T>(this IEnumerable<T> collection, Action<T> action)
+        {
+            var forEach = collection as T[] ?? collection.ToArray();
+            foreach (var item in forEach)
+            {
+                action(item);
+            }
+            return forEach;
+        } 
+    }
+    public interface IPipeFactory
+    {
+        TProcessor GetProcessor<TProcessor>() where TProcessor : IProcessor;
+    }
+    public interface IRecongnitionResultHander
+    {
+        void HandleSuccess(string result, Mat image);
+        void HandleFaulure(Mat image);
+    }
+    public class DebugLogger : IDebugLogger
+    {
+        private readonly IDebugLogBuilder _debugLogBuilder;
+        public DebugLogger(IDebugLogBuilder debugLogBuilder)
+        {
+            _debugLogBuilder = debugLogBuilder;
+        }
+        public void Log(Action<IDebugLogBuilder> logAction)
+        {
+            logAction(_debugLogBuilder);
+        }
+    }
+    [Obsolete("Do not use it directly, use IDebugLogger to access this functionality")]
+    public interface IDebugLogBuilder
+    {
+        IDebugLogBuilder AddMessage(string message);
+        IDebugLogBuilder AddImage(Mat image);
+    }
+    public interface IDebugLogger
+    {
+#pragma warning disable 618
+        void Log(Action<IDebugLogBuilder> logAction);
+#pragma warning restore 618
+    }
+     public class CannyFilter : IFilter<Mat, Mat>
+    {
+        private readonly IDebugLogger _debugLogger;
+        public CannyFilter(IDebugLogger debugLogger)
+        {
+            _debugLogger = debugLogger;
+        }
+        public Result<Mat> Process(Mat input)
+        {
+            CvInvoke.Canny(input, input, 100, 300, 3);
+            _debugLogger.Log(logBuilder => logBuilder.AddMessage("Canny result").AddImage(input));
+            return Result<Mat>.Ok(input);
+        }
+    }
+    public class CropLettersFilter : IFilter<Point[][], IEnumerable<Mat>>
+    {
+        private readonly IDebugLogger _debugLogger;
+        private Mat _image;
+        public CropLettersFilter(IDebugLogger debugLogger)
+        {
+            _debugLogger = debugLogger;
+        }
+        public Result<IEnumerable<Mat>> Process(Point[][] input)
+        {
+            if (_image == null)
+            {
+                return Result.Fail<IEnumerable<Mat>>("Image hasn't been set for CropLettersFilter");
+            }
+            _debugLogger.Log(debugLogBuilder =>
+            {
+                debugLogBuilder.AddMessage($"found letters {input.Length}");
+                var inputWithSelectedLetters = _image.Clone();
+                for (int i = 0; i < input.Length; i++)
+                {
+                    CvInvoke.DrawContours(inputWithSelectedLetters, new VectorOfVectorOfPoint(input), i, new MCvScalar(255, 255, 255));
+                }
+                debugLogBuilder.AddImage(inputWithSelectedLetters);
+            });
+            var rotationAngle = GetRotationAngle(input);
+            var imageToCrop = _image;
+            List<Mat> result = new List<Mat>();
+            foreach (var letterCountor in input)
+            {
+                var rect = CvInvoke.BoundingRectangle(new VectorOfPoint(letterCountor));
+                float angle = rotationAngle;
+                var rectSize = rect.Size;
+                var rectCenter = new PointF(rect.X + rectSize.Width / 2f, rect.Y + rectSize.Height / 2f);
+                //rectSize.Width += (int)Math.Floor(rectSize.Width*0.2);
+                //rectSize.Height += (int)Math.Floor(rectSize.Height*0.2);
+                rectSize.Width += 3;
+                rectSize.Height += 3;
+                if (angle < -45)
+                {
+                    angle += 90;
+                    var temp = rectSize.Width;
+                    rectSize.Width = rectSize.Height;
+                    rectSize.Height = temp;
+                }
+                var rotationMatrix = new Mat();
+                CvInvoke.GetRotationMatrix2D(rectCenter, angle, 1, rotationMatrix);
+                var rotated = new Mat();
+                CvInvoke.WarpAffine(imageToCrop, rotated, rotationMatrix, imageToCrop.Size, Inter.Cubic);
+                var cropped = new Mat();
+                CvInvoke.GetRectSubPix(rotated, new Size((int)rectSize.Width, (int)rectSize.Height), rectCenter, cropped);
+                result.Add(cropped);
+                //_debugLogger.Log(logBuilder => logBuilder.AddMessage("crop letter").AddImage(cropped));
+            }
+            return Result.Ok(result.AsEnumerable());
+        }
+        private float GetRotationAngle(Point[][] contours)
+        {
+            var hieghstPointsInTwoBiggestCountors =
+                contours.Select(contour => contour.OrderByDescending(point => point.Y))
+                    .OrderByDescending(contour => contour.First().Y)
+                    .Take(2)
+                    .Select(contour => contour.First())
+                    .ToArray();
+            var p1 = hieghstPointsInTwoBiggestCountors[0];
+            var p2 = hieghstPointsInTwoBiggestCountors[1];
+            var rotationAngleTangens = Math.Abs((float)p1.Y - p2.Y)/Math.Abs(p1.X - p2.X);
+            return (float)(Math.Atan(rotationAngleTangens) * 180 / Math.PI);
+        }
+        public void UseImage(Mat image)
+        {
+            _image = image;
+        }
+    }
+    public class DetectAndCropPlateNumberFilter : IFilter<Mat, IEnumerable<Mat>>
+    {
+        private readonly IDebugLogger _debugLogger;
+        public DetectAndCropPlateNumberFilter(IDebugLogger debugLogger)
+        {
+            _debugLogger = debugLogger;
+        }
+        public Result<IEnumerable<Mat>> Process(Mat input)
+        {
+            return Result.Ok(DetectAndCrop(input));
+        }
+        public IEnumerable<Mat> DetectAndCrop(Mat input)
+        {
+            var numberCascade = new CascadeClassifier("haarcascade_russian_plate_number.xml");
+            var rectangles = numberCascade.DetectMultiScale(input);
+            _debugLogger.Log(debugLogBuilder =>
+            {
+                debugLogBuilder.AddMessage($"Haarcascade return {rectangles.Length} results");
+                var inputCoppy = input.Clone();
+                rectangles.ForEach(r => CvInvoke.Rectangle(inputCoppy, r, new MCvScalar(255, 0, 0), 3, LineType.FourConnected));
+                debugLogBuilder.AddImage(inputCoppy);
+            });
+            return rectangles.Select(rectangle => new Mat(input, rectangle)).ToList();
+        }
+    }
+     public class FindContoursFilter : IFilter<Mat, Point[][]>
+    {
+        private readonly IDebugLogger _debugLogger;
+        public FindContoursFilter(IDebugLogger debugLogger)
+        {
+            _debugLogger = debugLogger;
+        }
+        public Result<Point[][]> Process(Mat input)
+        {
+            var contoursDetected = new VectorOfVectorOfPoint();
+            CvInvoke.FindContours(input, contoursDetected, null, RetrType.List, ChainApproxMethod.ChainApproxSimple);
+            var contours = contoursDetected.ToArrayOfArray();
+            Result<Point[][]> result;
+            if (contours.Length > 0)
+            {
+                result = Result.Ok(contours);
+            }
+            else
+            {
+                result = Result.Fail<Point[][]>("Contours hasn't been found");
+            }
+            _debugLogger.Log(logBuilder =>
+            {
+                if (result.Success)
+                {
+                    var imageToDrawContours = new Mat(input.Size, DepthType.Cv8U, 3);
+                    imageToDrawContours.SetTo(new MCvScalar(0, 0, 0));
+                    var random = new Random();
+                    for (int i = 0; i < contours.Length; i++)
+                    {
+                        CvInvoke.DrawContours(imageToDrawContours, contoursDetected, i, new MCvScalar(random.Next(255), random.Next(255), random.Next(255)));
+                    }
+                    logBuilder.AddMessage($"Found {contours.Length} contours").AddImage(imageToDrawContours);
+                }
+                else
+                {
+                    logBuilder.AddMessage(result.Error);
+                }
+            });
+            return result;
+        }
+    }
+    public class GaussianBlurFilter : IFilter<Mat, Mat>
+    {
+        public Result<Mat> Process(Mat input)
+        {
+            var level = 3;
+            CvInvoke.GaussianBlur(input, input, new Size(level, level), 0);
+            return Result<Mat>.Ok(input);
+        }
+    }
+    public class InvertBinarizedImageFilter : IFilter<Mat, Mat>
+    {
+        public Result<Mat> Process(Mat input)
+        {
+            CvInvoke.Threshold(input, input, 0, 255, ThresholdType.BinaryInv);
+            return Result<Mat>.Ok(input);
+        }
+    }
+    public class InvertBinarizedImageFilter : IFilter<Mat, Mat>
+    {
+        public Result<Mat> Process(Mat input)
+        {
+            CvInvoke.Threshold(input, input, 0, 255, ThresholdType.BinaryInv);
+            return Result<Mat>.Ok(input);
+        }
+    }
+    public class LogCurrentImageFilter : IFilter<Mat, Mat>
+    {
+        private readonly IDebugLogger _debugLogger;
+        public LogCurrentImageFilter(IDebugLogger debugLogger)
+        {
+            _debugLogger = debugLogger;
+        }
+        public Result<Mat> Process(Mat input)
+        {
+            _debugLogger.Log(debugBuilder => debugBuilder.AddMessage("Current image is:").AddImage(input));
+            return Result<Mat>.Ok(input);
+        }
+    }
+    public class MakeImageGrayFilter : IFilter<Mat, Mat>
+    {
+        public Result<Mat> Process(Mat input)
+        {
+            CvInvoke.CvtColor(input, input, ColorConversion.Bgr2Gray);
+            return Result.Ok(input);
+        }
+    }
+    public class OtsuBinarizationFilter : IFilter<Mat, Mat>
+    {
+        private readonly IDebugLogger _debugLogger;
+        public OtsuBinarizationFilter(IDebugLogger debugLogger)
+        {
+            _debugLogger = debugLogger;
+        }
+        public Result<Mat> Process(Mat input)
+        {
+            CvInvoke.Threshold(input, input, 0, 255, ThresholdType.Otsu);
+            _debugLogger.Log(logBuilder => logBuilder.AddMessage("Binarized image").AddImage(input));
+            return Result<Mat>.Ok(input);
+        }
+    }
+    public class ReadImageFromBytesFilter : IFilter<byte[], Mat>
+    {
+        private readonly IDebugLogger _debugLogger;
+        public ReadImageFromBytesFilter(IDebugLogger debugLogger)
+        {
+            _debugLogger = debugLogger;
+        }
+        public Result<Mat> Process(byte[] input)
+        {
+            var image = new Mat();
+            CvInvoke.Imdecode(input, LoadImageType.AnyColor, image);
+            _debugLogger.Log(debugLogBuilder => debugLogBuilder.AddMessage("Start process image").AddImage(image));
+            return Result<Mat>.Ok(image);
+        }
+    }
+    public class SelectLettersContours : IFilter<Point[][], Point[][]>
+    {
+        private Mat _image;
+        public Result<Point[][]> Process(Point[][] input)
+        {
+            var minLetterHeight = (int)(_image.Height * 0.30);
+            var maxLetterHeight = (int)(_image.Height * 0.8);
+            var minLetterWidth = (int)(_image.Width * 0.04);
+            var maxLetterWidth = (int)(_image.Width * 0.1);
+            var letterCountors = input.Where(countor =>
+            {
+                var countorHeight = countor.Max(point => point.Y) - countor.Min(point => point.Y);
+                var countorWidth = countor.Max(point => point.X) - countor.Min(point => point.X);
+                return countorHeight > minLetterHeight && countorHeight < maxLetterHeight && countorWidth > minLetterWidth && countorWidth < maxLetterWidth;
+            }).OrderBy(points => points.Min(point => point.X)).AsParallel().ToArray();
+            return Result.Ok(letterCountors);
+        }
+        public void UseImage(Mat value)
+        {
+            _image = value;
+        }
+    }
+    public class SelectLettersContours : IFilter<Point[][], Point[][]>
+    {
+        private Mat _image;
+        public Result<Point[][]> Process(Point[][] input)
+        {
+            var minLetterHeight = (int)(_image.Height * 0.30);
+            var maxLetterHeight = (int)(_image.Height * 0.8);
+            var minLetterWidth = (int)(_image.Width * 0.04);
+            var maxLetterWidth = (int)(_image.Width * 0.1);
+            var letterCountors = input.Where(countor =>
+            {
+                var countorHeight = countor.Max(point => point.Y) - countor.Min(point => point.Y);
+                var countorWidth = countor.Max(point => point.X) - countor.Min(point => point.X);
+                return countorHeight > minLetterHeight && countorHeight < maxLetterHeight && countorWidth > minLetterWidth && countorWidth < maxLetterWidth;
+            }).OrderBy(points => points.Min(point => point.X)).AsParallel().ToArray();
+            return Result.Ok(letterCountors);
+        }
+        public void UseImage(Mat value)
+        {
+            _image = value;
+        }
+    }
+    public class SelectLettersContours : IFilter<Point[][], Point[][]>
+    {
+        private Mat _image;
+        public Result<Point[][]> Process(Point[][] input)
+        {
+            var minLetterHeight = (int)(_image.Height * 0.30);
+            var maxLetterHeight = (int)(_image.Height * 0.8);
+            var minLetterWidth = (int)(_image.Width * 0.04);
+            var maxLetterWidth = (int)(_image.Width * 0.1);
+            var letterCountors = input.Where(countor =>
+            {
+                var countorHeight = countor.Max(point => point.Y) - countor.Min(point => point.Y);
+                var countorWidth = countor.Max(point => point.X) - countor.Min(point => point.X);
+                return countorHeight > minLetterHeight && countorHeight < maxLetterHeight && countorWidth > minLetterWidth && countorWidth < maxLetterWidth;
+            }).OrderBy(points => points.Min(point => point.X)).AsParallel().ToArray();
+            return Result.Ok(letterCountors);
+        }
+        public void UseImage(Mat value)
+        {
+            _image = value;
+        }
+    }
+    public class SelectLettersContours : IFilter<Point[][], Point[][]>
+    {
+        private Mat _image;
+        public Result<Point[][]> Process(Point[][] input)
+        {
+            var minLetterHeight = (int)(_image.Height * 0.30);
+            var maxLetterHeight = (int)(_image.Height * 0.8);
+            var minLetterWidth = (int)(_image.Width * 0.04);
+            var maxLetterWidth = (int)(_image.Width * 0.1);
+            var letterCountors = input.Where(countor =>
+            {
+                var countorHeight = countor.Max(point => point.Y) - countor.Min(point => point.Y);
+                var countorWidth = countor.Max(point => point.X) - countor.Min(point => point.X);
+                return countorHeight > minLetterHeight && countorHeight < maxLetterHeight && countorWidth > minLetterWidth && countorWidth < maxLetterWidth;
+            }).OrderBy(points => points.Min(point => point.X)).AsParallel().ToArray();
+            return Result.Ok(letterCountors);
+        }
+        public void UseImage(Mat value)
+        {
+            _image = value;
+        }
+    }
+    public class SelectLettersContours : IFilter<Point[][], Point[][]>
+    {
+        private Mat _image;
+        public Result<Point[][]> Process(Point[][] input)
+        {
+            var minLetterHeight = (int)(_image.Height * 0.30);
+            var maxLetterHeight = (int)(_image.Height * 0.8);
+            var minLetterWidth = (int)(_image.Width * 0.04);
+            var maxLetterWidth = (int)(_image.Width * 0.1);
+            var letterCountors = input.Where(countor =>
+            {
+                var countorHeight = countor.Max(point => point.Y) - countor.Min(point => point.Y);
+                var countorWidth = countor.Max(point => point.X) - countor.Min(point => point.X);
+                return countorHeight > minLetterHeight && countorHeight < maxLetterHeight && countorWidth > minLetterWidth && countorWidth < maxLetterWidth;
+            }).OrderBy(points => points.Min(point => point.X)).AsParallel().ToArray();
+            return Result.Ok(letterCountors);
+        }
+        public void UseImage(Mat value)
+        {
+            _image = value;
+        }
+    }
+    public class SelectLettersContours : IFilter<Point[][], Point[][]>
+    {
+        private Mat _image;
+        public Result<Point[][]> Process(Point[][] input)
+        {
+            var minLetterHeight = (int)(_image.Height * 0.30);
+            var maxLetterHeight = (int)(_image.Height * 0.8);
+            var minLetterWidth = (int)(_image.Width * 0.04);
+            var maxLetterWidth = (int)(_image.Width * 0.1);
+            var letterCountors = input.Where(countor =>
+            {
+                var countorHeight = countor.Max(point => point.Y) - countor.Min(point => point.Y);
+                var countorWidth = countor.Max(point => point.X) - countor.Min(point => point.X);
+                return countorHeight > minLetterHeight && countorHeight < maxLetterHeight && countorWidth > minLetterWidth && countorWidth < maxLetterWidth;
+            }).OrderBy(points => points.Min(point => point.X)).AsParallel().ToArray();
+            return Result.Ok(letterCountors);
+        }
+        public void UseImage(Mat value)
+        {
+            _image = value;
+        }
+    }
+    public class SelectLettersContours : IFilter<Point[][], Point[][]>
+    {
+        private Mat _image;
+        public Result<Point[][]> Process(Point[][] input)
+        {
+            var minLetterHeight = (int)(_image.Height * 0.30);
+            var maxLetterHeight = (int)(_image.Height * 0.8);
+            var minLetterWidth = (int)(_image.Width * 0.04);
+            var maxLetterWidth = (int)(_image.Width * 0.1);
+            var letterCountors = input.Where(countor =>
+            {
+                var countorHeight = countor.Max(point => point.Y) - countor.Min(point => point.Y);
+                var countorWidth = countor.Max(point => point.X) - countor.Min(point => point.X);
+                return countorHeight > minLetterHeight && countorHeight < maxLetterHeight && countorWidth > minLetterWidth && countorWidth < maxLetterWidth;
+            }).OrderBy(points => points.Min(point => point.X)).AsParallel().ToArray();
+            return Result.Ok(letterCountors);
+        }
+        public void UseImage(Mat value)
+        {
+            _image = value;
+        }
+    }
+    public class SelectLettersContours : IFilter<Point[][], Point[][]>
+    {
+        private Mat _image;
+        public Result<Point[][]> Process(Point[][] input)
+        {
+            var minLetterHeight = (int)(_image.Height * 0.30);
+            var maxLetterHeight = (int)(_image.Height * 0.8);
+            var minLetterWidth = (int)(_image.Width * 0.04);
+            var maxLetterWidth = (int)(_image.Width * 0.1);
+            var letterCountors = input.Where(countor =>
+            {
+                var countorHeight = countor.Max(point => point.Y) - countor.Min(point => point.Y);
+                var countorWidth = countor.Max(point => point.X) - countor.Min(point => point.X);
+                return countorHeight > minLetterHeight && countorHeight < maxLetterHeight && countorWidth > minLetterWidth && countorWidth < maxLetterWidth;
+            }).OrderBy(points => points.Min(point => point.X)).AsParallel().ToArray();
+            return Result.Ok(letterCountors);
+        }
+        public void UseImage(Mat value)
+        {
+            _image = value;
+        }
+    }
+    public class SelectLettersContours : IFilter<Point[][], Point[][]>
+    {
+        private Mat _image;
+        public Result<Point[][]> Process(Point[][] input)
+        {
+            var minLetterHeight = (int)(_image.Height * 0.30);
+            var maxLetterHeight = (int)(_image.Height * 0.8);
+            var minLetterWidth = (int)(_image.Width * 0.04);
+            var maxLetterWidth = (int)(_image.Width * 0.1);
+            var letterCountors = input.Where(countor =>
+            {
+                var countorHeight = countor.Max(point => point.Y) - countor.Min(point => point.Y);
+                var countorWidth = countor.Max(point => point.X) - countor.Min(point => point.X);
+                return countorHeight > minLetterHeight && countorHeight < maxLetterHeight && countorWidth > minLetterWidth && countorWidth < maxLetterWidth;
+            }).OrderBy(points => points.Min(point => point.X)).AsParallel().ToArray();
+            return Result.Ok(letterCountors);
+        }
+        public void UseImage(Mat value)
+        {
+            _image = value;
+        }
+    }
+    public class SelectLettersContours : IFilter<Point[][], Point[][]>
+    {
+        private Mat _image;
+        public Result<Point[][]> Process(Point[][] input)
+        {
+            var minLetterHeight = (int)(_image.Height * 0.30);
+            var maxLetterHeight = (int)(_image.Height * 0.8);
+            var minLetterWidth = (int)(_image.Width * 0.04);
+            var maxLetterWidth = (int)(_image.Width * 0.1);
+            var letterCountors = input.Where(countor =>
+            {
+                var countorHeight = countor.Max(point => point.Y) - countor.Min(point => point.Y);
+                var countorWidth = countor.Max(point => point.X) - countor.Min(point => point.X);
+                return countorHeight > minLetterHeight && countorHeight < maxLetterHeight && countorWidth > minLetterWidth && countorWidth < maxLetterWidth;
+            }).OrderBy(points => points.Min(point => point.X)).AsParallel().ToArray();
+            return Result.Ok(letterCountors);
+        }
+        public void UseImage(Mat value)
+        {
+            _image = value;
+        }
+    }
+    public class SelectLettersContours : IFilter<Point[][], Point[][]>
+    {
+        private Mat _image;
+        public Result<Point[][]> Process(Point[][] input)
+        {
+            var minLetterHeight = (int)(_image.Height * 0.30);
+            var maxLetterHeight = (int)(_image.Height * 0.8);
+            var minLetterWidth = (int)(_image.Width * 0.04);
+            var maxLetterWidth = (int)(_image.Width * 0.1);
+            var letterCountors = input.Where(countor =>
+            {
+                var countorHeight = countor.Max(point => point.Y) - countor.Min(point => point.Y);
+                var countorWidth = countor.Max(point => point.X) - countor.Min(point => point.X);
+                return countorHeight > minLetterHeight && countorHeight < maxLetterHeight && countorWidth > minLetterWidth && countorWidth < maxLetterWidth;
+            }).OrderBy(points => points.Min(point => point.X)).AsParallel().ToArray();
+            return Result.Ok(letterCountors);
+        }
+        public void UseImage(Mat value)
+        {
+            _image = value;
+        }
+    }
+    public class SelectLettersContours : IFilter<Point[][], Point[][]>
+    {
+        private Mat _image;
+        public Result<Point[][]> Process(Point[][] input)
+        {
+            var minLetterHeight = (int)(_image.Height * 0.30);
+            var maxLetterHeight = (int)(_image.Height * 0.8);
+            var minLetterWidth = (int)(_image.Width * 0.04);
+            var maxLetterWidth = (int)(_image.Width * 0.1);
+            var letterCountors = input.Where(countor =>
+            {
+                var countorHeight = countor.Max(point => point.Y) - countor.Min(point => point.Y);
+                var countorWidth = countor.Max(point => point.X) - countor.Min(point => point.X);
+                return countorHeight > minLetterHeight && countorHeight < maxLetterHeight && countorWidth > minLetterWidth && countorWidth < maxLetterWidth;
+            }).OrderBy(points => points.Min(point => point.X)).AsParallel().ToArray();
+            return Result.Ok(letterCountors);
+        }
+        public void UseImage(Mat value)
+        {
+            _image = value;
+        }
+    }
+    public class SelectLettersContours : IFilter<Point[][], Point[][]>
+    {
+        private Mat _image;
+        public Result<Point[][]> Process(Point[][] input)
+        {
+            var minLetterHeight = (int)(_image.Height * 0.30);
+            var maxLetterHeight = (int)(_image.Height * 0.8);
+            var minLetterWidth = (int)(_image.Width * 0.04);
+            var maxLetterWidth = (int)(_image.Width * 0.1);
+            var letterCountors = input.Where(countor =>
+            {
+                var countorHeight = countor.Max(point => point.Y) - countor.Min(point => point.Y);
+                var countorWidth = countor.Max(point => point.X) - countor.Min(point => point.X);
+                return countorHeight > minLetterHeight && countorHeight < maxLetterHeight && countorWidth > minLetterWidth && countorWidth < maxLetterWidth;
+            }).OrderBy(points => points.Min(point => point.X)).AsParallel().ToArray();
+            return Result.Ok(letterCountors);
+        }
+        public void UseImage(Mat value)
+        {
+            _image = value;
+        }
+    }
+    public class SelectLettersContours : IFilter<Point[][], Point[][]>
+    {
+        private Mat _image;
+        public Result<Point[][]> Process(Point[][] input)
+        {
+            var minLetterHeight = (int)(_image.Height * 0.30);
+            var maxLetterHeight = (int)(_image.Height * 0.8);
+            var minLetterWidth = (int)(_image.Width * 0.04);
+            var maxLetterWidth = (int)(_image.Width * 0.1);
+            var letterCountors = input.Where(countor =>
+            {
+                var countorHeight = countor.Max(point => point.Y) - countor.Min(point => point.Y);
+                var countorWidth = countor.Max(point => point.X) - countor.Min(point => point.X);
+                return countorHeight > minLetterHeight && countorHeight < maxLetterHeight && countorWidth > minLetterWidth && countorWidth < maxLetterWidth;
+            }).OrderBy(points => points.Min(point => point.X)).AsParallel().ToArray();
+            return Result.Ok(letterCountors);
+        }
+        public void UseImage(Mat value)
+        {
+            _image = value;
+        }
+    }
+    public class SelectLettersContours : IFilter<Point[][], Point[][]>
+    {
+        private Mat _image;
+        public Result<Point[][]> Process(Point[][] input)
+        {
+            var minLetterHeight = (int)(_image.Height * 0.30);
+            var maxLetterHeight = (int)(_image.Height * 0.8);
+            var minLetterWidth = (int)(_image.Width * 0.04);
+            var maxLetterWidth = (int)(_image.Width * 0.1);
+            var letterCountors = input.Where(countor =>
+            {
+                var countorHeight = countor.Max(point => point.Y) - countor.Min(point => point.Y);
+                var countorWidth = countor.Max(point => point.X) - countor.Min(point => point.X);
+                return countorHeight > minLetterHeight && countorHeight < maxLetterHeight && countorWidth > minLetterWidth && countorWidth < maxLetterWidth;
+            }).OrderBy(points => points.Min(point => point.X)).AsParallel().ToArray();
+            return Result.Ok(letterCountors);
+        }
+        public void UseImage(Mat value)
+        {
+            _image = value;
+        }
+    }
+    public class SelectLettersContours : IFilter<Point[][], Point[][]>
+    {
+        private Mat _image;
+        public Result<Point[][]> Process(Point[][] input)
+        {
+            var minLetterHeight = (int)(_image.Height * 0.30);
+            var maxLetterHeight = (int)(_image.Height * 0.8);
+            var minLetterWidth = (int)(_image.Width * 0.04);
+            var maxLetterWidth = (int)(_image.Width * 0.1);
+            var letterCountors = input.Where(countor =>
+            {
+                var countorHeight = countor.Max(point => point.Y) - countor.Min(point => point.Y);
+                var countorWidth = countor.Max(point => point.X) - countor.Min(point => point.X);
+                return countorHeight > minLetterHeight && countorHeight < maxLetterHeight && countorWidth > minLetterWidth && countorWidth < maxLetterWidth;
+            }).OrderBy(points => points.Min(point => point.X)).AsParallel().ToArray();
+            return Result.Ok(letterCountors);
+        }
+        public void UseImage(Mat value)
+        {
+            _image = value;
+        }
+    }
+    public class SelectLettersContours : IFilter<Point[][], Point[][]>
+    {
+        private Mat _image;
+        public Result<Point[][]> Process(Point[][] input)
+        {
+            var minLetterHeight = (int)(_image.Height * 0.30);
+            var maxLetterHeight = (int)(_image.Height * 0.8);
+            var minLetterWidth = (int)(_image.Width * 0.04);
+            var maxLetterWidth = (int)(_image.Width * 0.1);
+            var letterCountors = input.Where(countor =>
+            {
+                var countorHeight = countor.Max(point => point.Y) - countor.Min(point => point.Y);
+                var countorWidth = countor.Max(point => point.X) - countor.Min(point => point.X);
+                return countorHeight > minLetterHeight && countorHeight < maxLetterHeight && countorWidth > minLetterWidth && countorWidth < maxLetterWidth;
+            }).OrderBy(points => points.Min(point => point.X)).AsParallel().ToArray();
+            return Result.Ok(letterCountors);
+        }
+        public void UseImage(Mat value)
+        {
+            _image = value;
+        }
+    }
+    public class SelectLettersContours : IFilter<Point[][], Point[][]>
+    {
+        private Mat _image;
+        public Result<Point[][]> Process(Point[][] input)
+        {
+            var minLetterHeight = (int)(_image.Height * 0.30);
+            var maxLetterHeight = (int)(_image.Height * 0.8);
+            var minLetterWidth = (int)(_image.Width * 0.04);
+            var maxLetterWidth = (int)(_image.Width * 0.1);
+            var letterCountors = input.Where(countor =>
+            {
+                var countorHeight = countor.Max(point => point.Y) - countor.Min(point => point.Y);
+                var countorWidth = countor.Max(point => point.X) - countor.Min(point => point.X);
+                return countorHeight > minLetterHeight && countorHeight < maxLetterHeight && countorWidth > minLetterWidth && countorWidth < maxLetterWidth;
+            }).OrderBy(points => points.Min(point => point.X)).AsParallel().ToArray();
+            return Result.Ok(letterCountors);
+        }
+        public void UseImage(Mat value)
+        {
+            _image = value;    
+\end{lstlisting}
