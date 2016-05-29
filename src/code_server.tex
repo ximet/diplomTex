@@ -1,0 +1,336 @@
+\sectioncentered*{ПРИЛОЖЕНИЕ А}
+\addcontentsline{toc}{section}{Приложение Б Исходный текст серверного приложения}
+\begin{center}
+\vspace{-1em}
+\textbf{ (обязательное)}
+
+\textbf{Исходный код программного средства}
+\end{center}
+
+
+\begin{lstlisting}[language=C++, style=cplusplusstyle]
+var express = require('express');
+var router = express.Router();
+
+var UserController = require('./server/controllers/userController');
+var MedicineCardController = require('./server/controllers/MedicineCardController');
+
+//Add Enable CORS
+router.use(function(req, res, next) {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+    next();
+});
+
+router.post('/api/signup', UserController.register);
+router.post('/api/login', UserController.login);
+router.post('/api/profile', UserController.addProfile);
+router.post('/api/logout', function(req, res) {
+    res.status(200).json({ 'message': 'User logged out' });
+});
+router.post('/api/addchild', UserController.addChild);
+router.post('/api/pass-check', UserController.checkPasscode);
+
+router.post('/api/medcard', MedicineCardController.addNewCard);
+router.post('/api/edit-medcard', MedicineCardController.editMedCard);
+router.post('/api/delete-medcard', MedicineCardController.deleteMedCard);
+
+router.post('/api/medicat', MedicineCardController.addMedication);
+router.post('/api/diagnos', MedicineCardController.addDiagnostic);
+router.post('/api/getucard', MedicineCardController.getAllMedCard);
+
+module.exports = router;
+
+var MedicalService = require('../services/medicalService');
+
+var medicineCardController = {
+
+    addNewCard: function(req,res) {
+        MedicalService.addMedicalCard(req.body, function (err, data) {
+            if (err || data.status === 500) {
+                res.json({success: false, status: 500})
+            }
+            else {
+                res.status(200).json(data);
+            }
+        });
+    },
+
+    editMedCard: function(req,res) {
+        MedicalService.editMedicalCard(req.body, function (err, data) {
+            if (err || data.status === 500) {
+                res.json({success: false, status: 500})
+            }
+            else {
+                res.status(200).json(data);
+            }
+        });
+    },
+
+    deleteMedCard: function(req,res) {
+        var id = req.body.idMedCard;
+        MedicalService.deleteMedicalCard(id, function (err, data) {
+            if (err || data.status === 500) {
+                res.json({success: false, status: 500})
+            }
+            else {
+                res.status(200).json(data);
+            }
+        });
+    },
+
+    addMedication: function(req,res) {
+        MedicalService.addNewMedication(req.body, function (err, data) {
+            if (err || data.status === 500) {
+                res.json({success: false, status: 500})
+            }
+            else {
+                res.status(200).json(data);
+            }
+        });
+    },
+
+    addDiagnostic: function(req,res) {
+        MedicalService.addDiagnostic(req.body, function (err, data) {
+            if (err || data.status === 500) {
+                res.json({success: false, status: 500})
+            }
+            else {
+                res.status(200).json(data);
+            }
+        });
+    },
+
+    getAllMedCard: function(req,res) {
+        MedicalService.getAllMedicalCard(req.body, function (err, data) {
+            if (err || data.status === 500) {
+                res.json({success: false, status: 500})
+            }
+            else {
+                res.status(200).json(data);
+            }
+        });
+    }
+};
+
+module.exports = medicineCardController;
+
+var UserService = require('../services/userService');
+var ValidationHelper = require('../helpers/validationHelper');
+
+var userController = {
+
+    register: function(req,res) {
+        console.log(req.body);
+        if (ValidationHelper.checkRegistrationData(req.body)) {
+            UserService.registration(req.body, function (err, data) {
+                if (err || data.status === 500) {
+                    res.json({success: false, status: 500})
+                }
+                else {
+                    res.status(200).json(data);
+                }
+            });
+        }
+        else {
+            res.json({ success: false, status: 500, message: 'need more info' })
+        }
+    },
+
+    login: function(req, res) {
+        if (ValidationHelper.checkLoginData(req.body)) {
+            UserService.login(req.body, function (err, data) {
+               if (err || data.status === 500) {
+                   res.status(401).json({'message' : 'Invalid user/password'});
+               }
+               else {
+                   res.status(200).json(data);
+               }
+            });
+        }
+        else {
+            res.status(401).json({'message' : 'Invalid user/password'});
+        }
+    },
+
+    addProfile: function(req, res) {
+        if (ValidationHelper.checkProfileData(req.body.profile)) {
+            UserService.addProfile(req.body.profile, function (err, data) {
+                if (err || data.status === 500) {
+                    res.status(401).json({'message' : 'Invalid user/password'});
+                }
+                else {
+                    res.status(200).json(data);
+                }
+            });
+        }
+        else {
+            res.status(401).json({'message' : 'Invalid user/password'});
+        }
+    },
+
+    addChild: function(req, res) {
+        if (ValidationHelper.checkProfileData(req.body.profile)) {
+            UserService.addChild(req.body.profile, function (err, data) {
+                if (err || data.status === 500) {
+                    res.status(401).json({'message' : 'Invalid user/password'});
+                }
+                else {
+                    res.status(200).json(data);
+                }
+            });
+        }
+        else {
+            res.status(401).json({'message' : 'Invalid user/password'});
+        }
+    },
+    
+    checkPasscode: function (req, res) {
+        UserService.checkPasscode(req.body, function (err, data) {
+            
+            console.log(data);
+            
+            if (err || data.status === 500) {
+                res.status(401).json({'message' : 'Invalid user/password'});
+            }
+            else {
+                res.status(200).json(data);
+            }
+        });
+    }
+};
+
+module.exports = userController;
+
+var crypto = require('crypto');
+var config = require('../config/config');
+
+var cryptoHelper = {};
+
+cryptoHelper.encrypt = function(text) {
+
+    var cipher = crypto.createCipher('aes-256-cbc', config.secretKey);
+    var crypted = cipher.update(text, 'utf8', 'hex');
+    crypted += cipher.final('hex');
+    return crypted;
+
+};
+
+cryptoHelper.decrypt = function(text) {
+
+    var decipher = crypto.createDecipher('aes-256-cbc', config.secretKey);
+    var dec = decipher.update(text, 'hex' ,'utf8');
+    dec += decipher.final('utf8');
+    return dec;
+
+};
+
+cryptoHelper.createHash = function(text, salt) {
+
+    salt = salt ? salt : '';
+    return crypto.createHash('md5').update(text + salt).digest('hex');
+
+};
+
+module.exports = cryptoHelper;
+
+var validationHelper = {
+
+    checkRegistrationData: function(regData) {
+
+        if(!regData.email || !regData.password || !regData.confirmPassword) {
+            return false;
+        }
+
+        if(regData.password === regData.confirmPassword) {
+            return true;
+        }
+
+    },
+
+    checkLoginData: function(reqData) {
+        if (!reqData.email || !reqData.password) {
+            return false;
+        }
+
+        return true;
+    },
+
+    checkProfileData: function(reqData) {
+        if (!reqData.firstName || !reqData.lastName || !reqData.familyName || !reqData.gender || !reqData.dateOfBirth) {
+            return false;
+        }
+
+        return true;
+    }
+};
+
+module.exports = validationHelper;
+
+var mongoose = require('mongoose');
+
+var Schema = mongoose.Schema;
+
+var DoctorSchema = new Schema({
+    _id: Schema.Types.ObjectId,
+    firstNameDoctor: String,
+    lastNameDoctor: String,
+    familyNameDoctor: String,
+    specialization: String
+});
+
+module.exports = mongoose.model('Doctor', DoctorSchema);
+
+var mongoose = require('mongoose');
+
+var Schema = mongoose.Schema;
+
+var MedicalCardSchema = new Schema({
+    userId: String,
+    dateOfVisit: Date,
+    summary: String,
+    recommendations: String,
+    comments: String,
+    doctor: { type: Number, ref: 'Doctor' },
+    medications: { type: Number, ref: 'Medication' },
+    payment: { type: Number, ref: 'Payment' },
+});
+
+
+module.exports = mongoose.model('MedicalCard', MedicalCardSchema);
+
+var UserModel = require('../models/user');
+var mongoose = require('mongoose');
+
+var Schema = mongoose.Schema;
+
+var UserSchema = new Schema({
+    email: String,
+    passwordHash: String,
+    passwordSalt: String
+});
+
+module.exports = mongoose.model('User', UserSchema);
+
+var mongoose = require('mongoose');
+
+var Schema = mongoose.Schema;
+
+var ProfileSchema = new Schema({
+    _id: Schema.Types.ObjectId,
+    email: String,
+    firstName: String,
+    lastName: String,
+    familyName: String,
+    gender: String,
+    dateOfBirth: Date,
+    iDMedCard: String,
+    isChild: Boolean,
+    parent: Schema.Types.ObjectId
+});
+
+module.exports = mongoose.model('Profile', ProfileSchema);
+
+
+
+\end{lstlisting}

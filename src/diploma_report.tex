@@ -4,13 +4,13 @@
 
 \begin{document}
 
-\input{diploma_title}
+%\input{diploma_title}
 
-%\input{abstract} % page 2
+\input{abstract} % page 2
 
 %\input{diploma_task} % pages 3 and 4. printed separately
 
-\input{annotation} % not part of report
+%\input{annotation} % not part of report
 
 %\input{feedback} % not part of report need feedback
 %\input{review} % not part of report need review
@@ -23,7 +23,10 @@
 
 \input{references}
 
-\includepdf[pages={-}, pagecommand={}]{source_code.pdf}
+\input{code}
+
+\input{code_server}
+
 % \includepdf позволяет включить в результирующий pdf документ часть другого pdf документа, сделанного
 % например не с помощью TeX. Бывает полезно, если какие-то диаграммны нарисованы, например, с помощью 
 % Microoft Office и сохранены в pdf.
